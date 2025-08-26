@@ -18,6 +18,10 @@ A Discord bot to manage friends’ availability and study sessions. Only pings u
 | Command | Description |
 |---------|-------------|
 | `!addclass <day> <start> <end>` | Add a class to your schedule. Example: `!addclass Mon 09:00 10:30` |
+| `!removeclass <day> <start> <end>` | Remove a class from your schedule. Example: `!removeclass Mon 09:00 10:30` |
 | `!study <location> [duration]` | Announce a study session and ping only free users. Default duration is `30min`. Example: `!study Library 45min` |
-| `!free` | Check who is free right now. Example: `!free` |
-| `!test` | Test that new commands are loaded. |
+| `!free` | Check who is free right now. |
+| `!busy` | Mark yourself as busy manually (overrides schedule). |
+| `!available` | Mark yourself as available manually (overrides schedule). |
+| `!myschedule` | Display your weekly schedule. |
+| `!help` | Show a list of all commands and usage instructions. |
