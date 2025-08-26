@@ -17,7 +17,6 @@ A Discord bot to manage friends’ availability and study sessions. Only pings u
 
 | Command | Description |
 |---------|-------------|
-| `!helloooo` | Test command to check if bot is online. |
 | `!addclass <day> <start> <end>` | Add a class to your schedule. Example: `!addclass Mon 09:00 10:30` |
 | `!study <location> [duration]` | Announce a study session and ping only free users. Default duration is `30min`. Example: `!study Library 45min` |
 | `!free` | Check who is free right now. Example: `!free` |
