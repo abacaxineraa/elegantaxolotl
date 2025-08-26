@@ -53,6 +53,46 @@ def is_free(user_id: int) -> bool:
             return False
     return True
 
+
+def merge_classes(user_id: int):
+    """
+    Merge overlapping or consecutive class blocks for a user in the database.
+    After this runs, each user's schedule will have only continuous blocks.
+    """
+    cursor.execute("SELECT day, start, end FROM classes WHERE user_id=?", (user_id,))
+    classes = {}
+    for day, start, end in cursor.fetchall():
+        classes.setdefault(day, []).append((start, end))
+
+    # Merge intervals for each day
+    merged = {}
+    for day, intervals in classes.items():
+        sorted_intervals = sorted(intervals, key=lambda x: x[0])
+        merged_intervals = []
+        for start, end in sorted_intervals:
+            if not merged_intervals:
+                merged_intervals.append([start, end])
+            else:
+                last_start, last_end = merged_intervals[-1]
+                # Overlapping or consecutive -> merge
+                if start <= last_end:
+                    merged_intervals[-1][1] = max(end, last_end)
+                else:
+                    merged_intervals.append([start, end])
+        merged[day] = merged_intervals
+
+    # Clear old entries and insert merged
+    cursor.execute("DELETE FROM classes WHERE user_id=?", (user_id,))
+    for day, intervals in merged.items():
+        for start, end in intervals:
+            cursor.execute(
+                "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
+                (user_id, day, start, end)
+            )
+    conn.commit()
+
+
+
 # --- Load environment variables ---
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -80,35 +120,49 @@ async def hello(ctx):
     """
     await ctx.send("Hellu, world!")
 
+
 @bot.command()
 async def addclass(ctx, day: str, start: str, end: str):
-    """
-    Add a class to your schedule.
-
-    Usage: !addclass <day> <start> <end>
-    Example: !addclass Mon 10:00 14:00
-    """
+    """Add a class and automatically merge overlapping intervals."""
     cursor.execute(
         "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
         (ctx.author.id, day, start, end)
     )
-    conn.commit()
-    await ctx.send(f"✅ Added class for {ctx.author.display_name}: {day} {start}-{end}")
+    # Merge immediately after insertion
+    merge_classes(ctx.author.id)
+    await ctx.send(f"✅ Added and merged class for {ctx.author.display_name}: {day} {start}-{end}")
+
 
 @bot.command()
 async def removeclass(ctx, day: str, start: str, end: str):
     """
     Remove a class from your schedule.
-
-    Usage: !removeclass <day> <start> <end>
-    Example: !removeclass Mon 10:00 14:00
+    Automatically splits blocks if needed.
     """
-    cursor.execute(
-        "DELETE FROM classes WHERE user_id=? AND day=? AND start=? AND end=?",
-        (ctx.author.id, day, start, end)
-    )
+    cursor.execute("SELECT start, end FROM classes WHERE user_id=? AND day=?", (ctx.author.id, day))
+    intervals = cursor.fetchall()
+    new_intervals = []
+
+    for s, e in intervals:
+        # No overlap
+        if end <= s or start >= e:
+            new_intervals.append((s, e))
+        else:
+            # Overlap exists
+            if start > s:
+                new_intervals.append((s, start))  # left part remains
+            if end < e:
+                new_intervals.append((end, e))    # right part remains
+
+    # Delete old intervals and insert new ones
+    cursor.execute("DELETE FROM classes WHERE user_id=? AND day=?", (ctx.author.id, day))
+    for s, e in new_intervals:
+        cursor.execute("INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
+                       (ctx.author.id, day, s, e))
     conn.commit()
-    await ctx.send(f"❌ Removed class for {ctx.author.display_name}: {day} {start}-{end}")
+    await ctx.send(f"❌ Updated schedule after removing {day} {start}-{end} for {ctx.author.display_name}.")
+
+
 
 @bot.command()
 async def study(ctx, location: str, duration: str = "30min"):
@@ -190,6 +244,38 @@ async def myschedule(ctx):
         await ctx.send(f"📅 {ctx.author.display_name}'s schedule:\n{schedule}")
     else:
         await ctx.send("📅 You have no classes in your schedule.")
+
+
+@bot.command()
+async def importschedule(ctx, *, schedule_text: str):
+    """
+    Import your weekly schedule from multi-line text.
+    """
+    lines = schedule_text.strip().split("\n")
+    user_id = ctx.author.id
+
+    # Insert all lines into database
+    for line in lines:
+        try:
+            day, times = line.split()
+            start, end = times.split("-")
+            cursor.execute(
+                "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
+                (user_id, day, start, end)
+            )
+        except ValueError:
+            await ctx.send(f"⚠️ Invalid line: {line}")
+            continue
+
+    # Merge all overlapping/consecutive intervals after insert
+    merge_classes(user_id)
+    await ctx.send(f"✅ Schedule imported and merged for {ctx.author.display_name}.")
+
+
+
+
+
+
 
 # --- Run the bot ---
 bot.run(TOKEN)
