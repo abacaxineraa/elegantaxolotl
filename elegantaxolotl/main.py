@@ -1,5 +1,6 @@
 import os
 import discord
+from discord import Embed
 from discord.ext import commands
 from dotenv import load_dotenv
 import sqlite3
@@ -94,7 +95,8 @@ def merge_classes(user_id: int):
 
 
 # --- Load environment variables ---
-load_dotenv()
+env_path = Path(__file__).parent.parent / ".env"  # adjust path if needed
+load_dotenv(dotenv_path=env_path)
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 # --- Bot setup ---
@@ -227,7 +229,6 @@ async def available(ctx):
     await ctx.send(f"✅ {ctx.author.display_name} is now marked as available.")
 
 
-from discord import Embed
 
 @bot.command()
 async def myschedule(ctx):
@@ -294,4 +295,3 @@ async def importschedule(ctx, *, schedule_text: str):
 
 # --- Run the bot ---
 bot.run(TOKEN)
-ot.run(TOKEN)
