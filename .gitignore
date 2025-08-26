@@ -13,4 +13,4 @@ poetry.lock
 .venv/
 .direnv/
 .envrc
-elegantaxolotl/schedules.db
+elegantaxolotl/*.db
