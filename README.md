@@ -24,9 +24,5 @@ A Discord bot to manage friends’ availability and study sessions. Only pings u
 | `!busy` | Mark yourself as busy manually (overrides schedule). |
 | `!available` | Mark yourself as available manually (overrides schedule). |
 | `!myschedule` | Display your weekly schedule. |
-| `!importschedule` |  Import multiple class blocks at once. Format:  
-!importschedule
-Mon 10:00-12:30
-Mon 13:30-16:00
-Tue 10:00-11:30 |
+| `!importschedule` |  Import multiple class blocks at once. Format:<br>!importschedule<br>Mon 10:00-12:30<br>Mon 13:30-16:00<br>Tue 10:00-11:30 |
 | `!help` | Show a list of all commands and usage instructions. |
