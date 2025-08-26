@@ -226,24 +226,39 @@ async def available(ctx):
     conn.commit()
     await ctx.send(f"✅ {ctx.author.display_name} is now marked as available.")
 
+
+from discord import Embed
+
 @bot.command()
 async def myschedule(ctx):
     """
-    Display your weekly schedule.
-
-    Usage: !myschedule
-    Shows all classes sorted by day and start time.
+    Show your schedule in a neat embedded message, ordered by day and time.
     """
-    cursor.execute(
-        "SELECT day, start, end FROM classes WHERE user_id=? ORDER BY day, start",
-        (ctx.author.id,)
-    )
+    # Fetch all classes for the user
+    cursor.execute("SELECT day, start, end FROM classes WHERE user_id=?", (ctx.author.id,))
     rows = cursor.fetchall()
-    if rows:
-        schedule = "\n".join([f"{day}: {start} - {end}" for day, start, end in rows])
-        await ctx.send(f"📅 {ctx.author.display_name}'s schedule:\n{schedule}")
-    else:
+    if not rows:
         await ctx.send("📅 You have no classes in your schedule.")
+        return
+
+    # Order days
+    day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    schedule_dict = {day: [] for day in day_order}
+    for day, start, end in rows:
+        schedule_dict[day].append(f"{start} - {end}")
+
+    # Sort times within each day
+    for day in day_order:
+        schedule_dict[day].sort()
+
+    # Build embed
+    embed = Embed(title=f"{ctx.author.display_name}'s Schedule 📅", color=0x1abc9c)
+    for day in day_order:
+        if schedule_dict[day]:
+            times = "\n".join(schedule_dict[day])
+            embed.add_field(name=day, value=times, inline=False)
+
+    await ctx.send(embed=embed)
 
 
 @bot.command()
