@@ -3,8 +3,8 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
-env_path = Path(__file__).parent.parent / ".env"  # one folder up
-load_dotenv(dotenv_path=env_path)
+# load .env file (with DISCORD_TOKEN)
+load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()

@@ -1,14 +1,19 @@
-[tool.poetry]
-name = "pynoter"
+[project]
+name = "elegantaxolotl"
 version = "0.1.0"
 description = ""
-authors = ["Ana Torres <anasofitorresbe@gmail.com>"]
+authors = [
+    {name = "Ana Torres",email = "anasofitorresbe@gmail.com"}
+]
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.12"
+requires-python = ">=3.11"
+dependencies = [
+    "discord (>=2.3.2,<3.0.0)",
+    "dotenv (>=0.9.9,<0.10.0)",
+    "datetime (>=5.5,<6.0)"
+]
 
 
 [build-system]
-requires = ["poetry-core"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
