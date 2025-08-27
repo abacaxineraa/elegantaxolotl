@@ -5,7 +5,7 @@ description = ""
 authors = [
     {name = "Ana Torres",email = "anasofitorresbe@gmail.com"}
 ]
-readme = "README.md"
+# readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "discord (>=2.3.2,<3.0.0)",
