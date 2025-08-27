@@ -92,7 +92,13 @@ def merge_classes(user_id: int):
             )
     conn.commit()
 
-
+def has_activity_role(member: discord.Member, activity: str) -> bool:
+    """
+    Check if the member has a role matching the activity (case-insensitive).
+    """
+    return any(role.name.lower() == activity.lower() for role in member.roles)
+    
+    
 
 # --- Load environment variables ---
 env_path = Path(__file__).parent.parent / ".env"  # adjust path if needed
@@ -165,21 +171,31 @@ async def removeclass(ctx, day: str, start: str, end: str):
     await ctx.send(f"❌ Updated schedule after removing {day} {start}-{end} for {ctx.author.display_name}.")
 
 
-
 @bot.command()
-async def study(ctx, location: str, duration: str = "30min"):
+async def ping(ctx, activity: str, *, message: str = ""):
     """
-    Announce a study session and ping only users who are free.
+    Ping users who are free and have a specific role/activity.
+    
+    Usage: !ping <activity> [optional message]
+    Example: !ping studying Come join at the library!
+    """
+    # Get all members excluding bots
+    members = [m for m in ctx.guild.members if not m.bot]
 
-    Usage: !study <location> [duration]
-    Default duration: 30min
-    Example: !study Library 45min
-    """
-    cursor.execute("SELECT DISTINCT user_id FROM classes")
-    user_ids = [row[0] for row in cursor.fetchall()]
-    free_users = [ctx.guild.get_member(uid) for uid in user_ids if is_free(uid)]
-    mentions = " ".join([u.mention for u in free_users if u])
-    await ctx.send(f"📚 {ctx.author.display_name} is studying at {location} for {duration}. Come join! {mentions}")
+    # Filter members: free AND has role
+    valid_members = [
+        m for m in members
+        if is_free(m.id) and has_activity_role(m, activity)
+    ]
+
+    if not valid_members:
+        await ctx.send(f"😅 No one is free with the role '{activity}' right now.")
+        return
+
+    mentions = " ".join(m.mention for m in valid_members)
+    await ctx.send(f"📢 {ctx.author.display_name} says: {message} {mentions}")
+
+
 
 @bot.command()
 async def free(ctx):
@@ -288,10 +304,53 @@ async def importschedule(ctx, *, schedule_text: str):
     await ctx.send(f"✅ Schedule imported and merged for {ctx.author.display_name}.")
 
 
+@bot.command()
+async def myroles(ctx):
+    """
+    List all roles the user currently has.
+    """
+    roles = [role.name for role in ctx.author.roles if role.name != "@everyone"]
+    if roles:
+        await ctx.send(f"🎯 {ctx.author.display_name}'s roles: {', '.join(roles)}")
+    else:
+        await ctx.send(f"⚠️ {ctx.author.display_name} has no roles yet.")
+        
+        
+        
+@bot.command()
+async def schedule(ctx, member: discord.Member):
+    """
+    Show another user's schedule.
+    
+    Usage: !schedule @username
+    """
+    cursor.execute("SELECT day, start, end FROM classes WHERE user_id=?", (member.id,))
+    rows = cursor.fetchall()
 
+    if not rows:
+        await ctx.send(f"📅 {member.display_name} has no classes in their schedule.")
+        return
 
+    # Order days
+    day_order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    schedule_dict = {day: [] for day in day_order}
+    for day, start, end in rows:
+        schedule_dict[day].append(f"{start} - {end}")
+
+    # Sort times within each day
+    for day in day_order:
+        schedule_dict[day].sort()
+
+    # Build embed
+    embed = discord.Embed(title=f"{member.display_name}'s Schedule 📅", color=0x1abc9c)
+    for day in day_order:
+        if schedule_dict[day]:
+            embed.add_field(name=day, value="\n".join(schedule_dict[day]), inline=False)
+
+    await ctx.send(embed=embed)
 
 
 
 # --- Run the bot ---
 bot.run(TOKEN)
+  
