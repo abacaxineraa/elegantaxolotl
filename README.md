@@ -21,7 +21,7 @@ A Discord bot to manage friends’ availability and study sessions. Only pings u
 | `!addclass <day> <start> <end>` | Add a class to your schedule. Example: `!addclass Mon 09:00 10:30` |
 | `!removeclass <day> <start> <end>` | Remove a class from your schedule. Example: `!removeclass Mon 09:00 10:30` |
 | `!myschedule` | Display your weekly schedule. |
-| `!importschedule` | Import multiple class blocks at once. Example:<br> <code>!importschedule &nbsp; Mon 10:00-12:30<br>Mon 13:30-16:00<br>Tue 10:00-11:30</code> |
+| `!importschedule` | Import multiple class blocks at once. Example:<br> <pre>!importschedule<br>Mon 10:00-12:30<br>Mon 13:30-16:00<br>Tue 10:00-11:30</pre> |
 | `!busy` | Mark yourself as busy manually (overrides schedule). |
 | `!available` | Mark yourself as available manually (overrides schedule). |
 | `!free` | Show members who are free right now. |
