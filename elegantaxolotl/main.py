@@ -31,28 +31,39 @@ CREATE TABLE IF NOT EXISTS overrides (
 conn.commit()
 
 # --- Helper functions ---
-def is_free(user_id: int) -> bool:
-    """
-    Check if a user is currently free.
 
-    Returns:
-        True if the user is free (not in class and not marked busy), False otherwise.
-    """
-    # Check manual override first
+
+def parse_time(t: str) -> datetime.time:
+    return datetime.strptime(t, "%H:%M").time()
+
+def is_free(user_id: int) -> bool:
     cursor.execute("SELECT status FROM overrides WHERE user_id=?", (user_id,))
     row = cursor.fetchone()
     if row:
         return row[0] == "available"
 
     now = datetime.now()
-    weekday = now.strftime("%a")
-    current_time = now.strftime("%H:%M")
+    weekday = now.strftime("%a")  
+    current_time = now.time()     
 
     cursor.execute("SELECT start, end FROM classes WHERE user_id=? AND day=?", (user_id, weekday))
-    for start, end in cursor.fetchall():
-        if start <= current_time <= end:
+    rows = cursor.fetchall()
+    for start, end in rows:
+        start_t = parse_time(start)
+        end_t = parse_time(end)
+        if start_t <= current_time <= end_t:
             return False
     return True
+
+day_map = {
+    "monday": "Mon", "mon": "Mon",
+    "tuesday": "Tue", "tue": "Tue",
+    "wednesday": "Wed", "wed": "Wed",
+    "thursday": "Thu", "thu": "Thu",
+    "friday": "Fri", "fri": "Fri",
+    "saturday": "Sat", "sat": "Sat",
+    "sunday": "Sun", "sun": "Sun",
+}
 
 
 def merge_classes(user_id: int):
@@ -108,6 +119,7 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 # --- Bot setup ---
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True   
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # --- Events ---
@@ -132,6 +144,7 @@ async def hello(ctx):
 @bot.command()
 async def addclass(ctx, day: str, start: str, end: str):
     """Add a class and automatically merge overlapping intervals."""
+    day = day_map.get(day.lower(), day)
     cursor.execute(
         "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
         (ctx.author.id, day, start, end)
@@ -171,11 +184,12 @@ async def removeclass(ctx, day: str, start: str, end: str):
     await ctx.send(f"❌ Updated schedule after removing {day} {start}-{end} for {ctx.author.display_name}.")
 
 
+
 @bot.command()
 async def ping(ctx, activity: str, *, message: str = ""):
     """
     Ping users who are free and have a specific role/activity.
-    
+
     Usage: !ping <activity> [optional message]
     Example: !ping studying Come join at the library!
     """
@@ -193,28 +207,100 @@ async def ping(ctx, activity: str, *, message: str = ""):
         return
 
     mentions = " ".join(m.mention for m in valid_members)
-    await ctx.send(f"📢 {ctx.author.display_name} says: {message} {mentions}")
+    # Include the activity in the message
+    activity_msg = f"📢 Pinged for **{activity}**!"
+    full_message = f"{ctx.author.display_name} says: {message}\n{activity_msg} {mentions}"
+    await ctx.send(full_message)
+
+
+@bot.command()
+async def isfree(ctx, member: discord.Member):
+    """
+    Check if a specific user is free based on their schedule and overrides.
+
+    Usage: !isfree @username
+    """
+    free_status = is_free(member.id)
+    if free_status:
+        await ctx.send(f"✅ {member.display_name} is currently free!")
+    else:
+        await ctx.send(f"⛔ {member.display_name} is currently busy.")
 
 
 
 @bot.command()
 async def free(ctx):
     """
-    Check who is free right now.
-
-    Usage: !free
+    Show all users in the database who are currently free.
+    If no one is free, send a message saying so.
     """
+    # Get all user_ids from DB
+    cursor.execute("""
+        SELECT DISTINCT user_id FROM classes
+        UNION
+        SELECT DISTINCT user_id FROM overrides
+    """)
+    rows = cursor.fetchall()
+
     free_users = []
-    for member in ctx.guild.members:
-        if member.bot:
-            continue
-        if is_free(member.id):
-            free_users.append(member.mention)
+
+    for (uid,) in rows:
+        member = ctx.guild.get_member(int(uid))
+        if member:
+            mention = member.mention
+        else:
+            # fallback for users not cached in guild
+            mention = f"<@{uid}>"
+
+        if is_free(uid):
+            free_users.append(mention)
 
     if free_users:
         await ctx.send(f"✅ These users are free right now: {', '.join(free_users)}")
     else:
         await ctx.send("😅 No one is free right now.")
+
+
+
+@bot.command()
+async def clearoverride(ctx):
+    """
+    Remove your manual busy/available override.
+    After this, your free/busy status will be determined by your schedule only.
+
+    Usage: !clearoverride
+    """
+    cursor.execute("DELETE FROM overrides WHERE user_id=?", (ctx.author.id,))
+    conn.commit()
+    await ctx.send(f"🗑️ {ctx.author.display_name}'s override has been cleared. Status now depends only on schedule.")
+
+@bot.command()
+async def users(ctx):
+    """
+    List all users saved in the database.
+    Usage: !users
+    """
+    cursor.execute("SELECT user_id FROM classes")
+    rows = cursor.fetchall()
+
+    if not rows:
+        await ctx.send("📂 No users found in the database.")
+        return
+
+    # Use a set to avoid duplicates
+    user_ids = {row[0] for row in rows}
+
+    mentions = []
+    for uid in user_ids:
+        member = ctx.guild.get_member(int(uid))
+        if member:
+            mentions.append(member.mention)
+        else:
+            mentions.append(f"<@{uid}>")  # fallback if not in guild
+
+    await ctx.send(f"👥 Users in database: {', '.join(mentions)}")
+
+
 
 @bot.command()
 async def busy(ctx):
@@ -283,13 +369,14 @@ async def importschedule(ctx, *, schedule_text: str):
     """
     Import your weekly schedule from multi-line text.
     """
+    
     lines = schedule_text.strip().split("\n")
     user_id = ctx.author.id
 
-    # Insert all lines into database
     for line in lines:
         try:
             day, times = line.split()
+            day = day_map.get(day.lower(), day)
             start, end = times.split("-")
             cursor.execute(
                 "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
@@ -353,4 +440,4 @@ async def schedule(ctx, member: discord.Member):
 
 # --- Run the bot ---
 bot.run(TOKEN)
-  
+    
