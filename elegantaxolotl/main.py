@@ -112,7 +112,7 @@ def has_activity_role(member: discord.Member, activity: str) -> bool:
     
 
 # --- Load environment variables ---
-env_path = Path(__file__).parent.parent / ".env"  # adjust path if needed
+env_path = Path(__file__).parent.parent / ".env" 
 load_dotenv(dotenv_path=env_path)
 TOKEN = os.getenv("DISCORD_TOKEN")
 
@@ -153,7 +153,7 @@ async def addclass(ctx, day: str, start: str, end: str):
         "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
         (ctx.author.id, day, start, end)
     )
-    # Merge immediately after insertion
+ 
     merge_classes(ctx.author.id)
     await ctx.send(f"✅ Added and merged class for {ctx.author.display_name}: {day} {start}-{end}")
 
@@ -259,9 +259,9 @@ async def free(ctx):
     for (uid,) in rows:
         member = ctx.guild.get_member(int(uid))
         if member:
-            name = member.display_name  # ✅ use name instead of mention
+            name = member.display_name
         else:
-            name = f"Unknown User ({uid})"  # fallback if not in guild
+            name = f"Unknown User ({uid})"
 
         if is_free(uid):
             free_users.append(name)
@@ -305,7 +305,7 @@ async def users(ctx):
         if member:
             mentions.append(member.mention)
         else:
-            mentions.append(f"<@{uid}>")  # fallback if not in guild
+            mentions.append(f"<@{uid}>")
 
     await ctx.send(f"👥 Users in database: {', '.join(mentions)}")
 
