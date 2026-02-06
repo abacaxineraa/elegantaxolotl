@@ -142,6 +142,10 @@ async def hello(ctx):
 
 
 @bot.command()
+async def apologize(ctx):
+    await ctx.send("SORRY PARENT OF MINE")
+
+@bot.command()
 async def addclass(ctx, day: str, start: str, end: str):
     """Add a class and automatically merge overlapping intervals."""
     day = day_map.get(day.lower(), day)
@@ -153,36 +157,44 @@ async def addclass(ctx, day: str, start: str, end: str):
     merge_classes(ctx.author.id)
     await ctx.send(f"✅ Added and merged class for {ctx.author.display_name}: {day} {start}-{end}")
 
-
 @bot.command()
 async def removeclass(ctx, day: str, start: str, end: str):
-    """
-    Remove a class from your schedule.
-    Automatically splits blocks if needed.
-    """
+    """Remove a class from your schedule."""
+    day = day_map.get(day.lower(), day)
+
     cursor.execute("SELECT start, end FROM classes WHERE user_id=? AND day=?", (ctx.author.id, day))
     intervals = cursor.fetchall()
-    new_intervals = []
+    if not intervals:
+        await ctx.send(f"⚠️ No classes found on {day} for {ctx.author.display_name}.")
+        return
 
+    def parse_time(t):
+        return datetime.strptime(t, "%H:%M").time()
+
+    start_t = parse_time(start)
+    end_t = parse_time(end)
+
+    new_intervals = []
     for s, e in intervals:
-        # No overlap
-        if end <= s or start >= e:
+        s_t = parse_time(s)
+        e_t = parse_time(e)
+        if end_t <= s_t or start_t >= e_t:
             new_intervals.append((s, e))
         else:
-            # Overlap exists
-            if start > s:
-                new_intervals.append((s, start))  # left part remains
-            if end < e:
-                new_intervals.append((end, e))    # right part remains
+            if start_t > s_t:
+                new_intervals.append((s, start))
+            if end_t < e_t:
+                new_intervals.append((end, e))
 
-    # Delete old intervals and insert new ones
     cursor.execute("DELETE FROM classes WHERE user_id=? AND day=?", (ctx.author.id, day))
     for s, e in new_intervals:
-        cursor.execute("INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
-                       (ctx.author.id, day, s, e))
+        cursor.execute(
+            "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
+            (ctx.author.id, day, s, e)
+        )
     conn.commit()
-    await ctx.send(f"❌ Updated schedule after removing {day} {start}-{end} for {ctx.author.display_name}.")
 
+    await ctx.send(f"❌ Updated schedule after removing {day} {start}-{end} for {ctx.author.display_name}.")
 
 
 @bot.command()
@@ -227,12 +239,12 @@ async def isfree(ctx, member: discord.Member):
         await ctx.send(f"⛔ {member.display_name} is currently busy.")
 
 
-
 @bot.command()
 async def free(ctx):
     """
     Show all users in the database who are currently free.
     If no one is free, send a message saying so.
+    Does NOT ping users, just shows names.
     """
     # Get all user_ids from DB
     cursor.execute("""
@@ -247,21 +259,18 @@ async def free(ctx):
     for (uid,) in rows:
         member = ctx.guild.get_member(int(uid))
         if member:
-            mention = member.mention
+            name = member.display_name  # ✅ use name instead of mention
         else:
-            # fallback for users not cached in guild
-            mention = f"<@{uid}>"
+            name = f"Unknown User ({uid})"  # fallback if not in guild
 
         if is_free(uid):
-            free_users.append(mention)
+            free_users.append(name)
 
     if free_users:
         await ctx.send(f"✅ These users are free right now: {', '.join(free_users)}")
     else:
         await ctx.send("😅 No one is free right now.")
-
-
-
+  
 @bot.command()
 async def clearoverride(ctx):
     """
@@ -370,9 +379,15 @@ async def importschedule(ctx, *, schedule_text: str):
     Import your weekly schedule from multi-line text.
     """
     
-    lines = schedule_text.strip().split("\n")
     user_id = ctx.author.id
 
+    # --- Clear existing schedule first ---
+    cursor.execute("DELETE FROM classes WHERE user_id=?", (user_id,))
+    conn.commit()
+
+    # --- Parse and import new schedule ---
+    lines = schedule_text.strip().split("\n")
+    inserted = 0
     for line in lines:
         try:
             day, times = line.split()
@@ -382,14 +397,17 @@ async def importschedule(ctx, *, schedule_text: str):
                 "INSERT INTO classes (user_id, day, start, end) VALUES (?, ?, ?, ?)",
                 (user_id, day, start, end)
             )
+            inserted += 1
         except ValueError:
-            await ctx.send(f"⚠️ Invalid line: {line}")
+            await ctx.send(f"⚠️ Invalid line format: `{line}` (expected: 'Day HH:MM-HH:MM')")
             continue
 
-    # Merge all overlapping/consecutive intervals after insert
-    merge_classes(user_id)
-    await ctx.send(f"✅ Schedule imported and merged for {ctx.author.display_name}.")
+    conn.commit()
 
+    # --- Merge any overlaps ---
+    merge_classes(user_id)
+
+    await ctx.send(f"✅ Cleared old schedule and imported {inserted} new entries for {ctx.author.display_name}.")
 
 @bot.command()
 async def myroles(ctx):
